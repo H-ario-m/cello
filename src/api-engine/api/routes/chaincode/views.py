@@ -6,7 +6,10 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 import os
-import tempfile, shutil, tarfile, json
+import tempfile
+import shutil
+import tarfile
+import json
 
 from drf_yasg.utils import swagger_auto_schema
 from api.config import FABRIC_CHAINCODE_STORE
@@ -35,7 +38,9 @@ import threading
 import hashlib
 import logging
 
+
 LOG = logging.getLogger(__name__)
+
 
 class ChainCodeViewSet(viewsets.ViewSet):
     """Class represents Channel related operations."""
@@ -110,7 +115,10 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 ]
                 response = ChaincodeListResponse(
                     {"data": chanincodes_list, "total": chaincodes.count()})
-                return Response(data=ok(response.data), status=status.HTTP_200_OK)
+                return Response(
+                    data=ok(
+                        response.data),
+                    status=status.HTTP_200_OK)
             except Exception as e:
                 return Response(
                     err(e.args), status=status.HTTP_400_BAD_REQUEST
@@ -144,22 +152,23 @@ class ChainCodeViewSet(viewsets.ViewSet):
                         if member.name.endswith("metadata.json"):
                             metadata_file = member
                             break
-                    
+
                     if metadata_file is not None:
                         # Extract the metadata file
-                        metadata_content = tar.extractfile(metadata_file).read().decode("utf-8")
+                        metadata_content = tar.extractfile(
+                            metadata_file).read().decode("utf-8")
                         metadata = json.loads(metadata_content)
                         label = metadata.get("label")
                     else:
                         return Response(
-                            err("Metadata file not found in the chaincode package."), status=status.HTTP_400_BAD_REQUEST
-                        )
+                            err("Metadata file not found in the chaincode package."),
+                            status=status.HTTP_400_BAD_REQUEST)
 
                 org = request.user.organization
                 # qs = Node.objects.filter(type="peer", organization=org)
                 # if not qs.exists():
                 #     return Response(
-                #         err("at least 1 peer node is required for the chaincode package upload."), 
+                #         err("at least 1 peer node is required for the chaincode package upload."),
                 #         status=status.HTTP_400_BAD_REQUEST
                 #     )
                 # peer_node = qs.first()
@@ -168,7 +177,7 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 # return_code, content = peer_channel_cli.lifecycle_calculatepackageid(temp_cc_path)
                 # if (return_code != 0):
                 #     return Response(
-                #         err("calculate packageid failed for {}.".format(content)), 
+                #         err("calculate packageid failed for {}.".format(content)),
                 #         status=status.HTTP_400_BAD_REQUEST
                 #     )
                 # packageid = content.strip()
@@ -184,7 +193,7 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 cc = ChainCode.objects.filter(package_id=packageid)
                 if cc.exists():
                     return Response(
-                        err("package with id {} already exists.".format(packageid)), 
+                        err("package with id {} already exists.".format(packageid)),
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -205,8 +214,9 @@ class ChainCodeViewSet(viewsets.ViewSet):
 
                 # start thread to read package meta info, update db
                 try:
-                    threading.Thread(target=self._read_cc_pkg,
-                                        args=(uuid, file.name, ccpackage_path)).start()
+                    threading.Thread(
+                        target=self._read_cc_pkg, args=(
+                            uuid, file.name, ccpackage_path)).start()
                 except Exception as e:
                     raise e
 
@@ -229,6 +239,8 @@ class ChainCodeViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def install(self, request):
         chaincode_id = request.data.get("id")
+        # Get the selected node ID from request
+        node_id = request.data.get("node")
         try:
             cc_targz = ""
             file_path = os.path.join(FABRIC_CHAINCODE_STORE, chaincode_id)
@@ -237,16 +249,31 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 break
 
             org = request.user.organization
-            qs = Node.objects.filter(type="peer", organization=org)
-            if not qs.exists():
-                raise ResourceNotFound
-            peer_node = qs.first()
+
+            # If node_id is provided, get that specific node
+            if node_id:
+                try:
+                    peer_node = Node.objects.get(
+                        id=node_id, type="peer", organization=org)
+                except Node.DoesNotExist:
+                    return Response(
+                        err("Selected peer node not found or not authorized."),
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                # Fallback to first peer if no node selected
+                qs = Node.objects.filter(type="peer", organization=org)
+                if not qs.exists():
+                    raise ResourceNotFound
+                peer_node = qs.first()
 
             envs = init_env_vars(peer_node, org)
             peer_channel_cli = PeerChainCode(**envs)
             res = peer_channel_cli.lifecycle_install(cc_targz)
             if res != 0:
-                return Response(err("install chaincode failed."), status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    err("install chaincode failed."),
+                    status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(
                 err(e.args), status=status.HTTP_400_BAD_REQUEST
@@ -276,7 +303,9 @@ class ChainCodeViewSet(viewsets.ViewSet):
             res, installed_chaincodes = peer_channel_cli.lifecycle_query_installed(
                 timeout)
             if res != 0:
-                return Response(err("query installed chaincode failed."), status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    err("query installed chaincode failed."),
+                    status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(
                 err(e.args), status=status.HTTP_400_BAD_REQUEST
@@ -305,7 +334,9 @@ class ChainCodeViewSet(viewsets.ViewSet):
             peer_channel_cli = PeerChainCode(**envs)
             res = peer_channel_cli.lifecycle_get_installed_package(timeout)
             if res != 0:
-                return Response(err("get installed package failed."), status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    err("get installed package failed."),
+                    status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             return Response(
@@ -355,10 +386,14 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 envs = init_env_vars(peer_node, org)
 
                 peer_channel_cli = PeerChainCode(**envs)
-                code, content = peer_channel_cli.lifecycle_approve_for_my_org(orderer_url, orderer_tls_root_cert, channel_name,
-                                                                              chaincode_name, chaincode_version, policy, sequence)
+                code, content = peer_channel_cli.lifecycle_approve_for_my_org(
+                    orderer_url, orderer_tls_root_cert, channel_name, chaincode_name, chaincode_version, policy, sequence)
                 if code != 0:
-                    return Response(err(" lifecycle_approve_for_my_org failed. err: " + content), status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        err(
+                            " lifecycle_approve_for_my_org failed. err: " +
+                            content),
+                        status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 return Response(
                     err(e.args), status=status.HTTP_400_BAD_REQUEST
@@ -390,7 +425,9 @@ class ChainCodeViewSet(viewsets.ViewSet):
             code, content = peer_channel_cli.lifecycle_query_approved(
                 channel_name, cc_name)
             if code != 0:
-                return Response(err("query_approved failed."), status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    err("query_approved failed."),
+                    status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             return Response(
@@ -441,11 +478,12 @@ class ChainCodeViewSet(viewsets.ViewSet):
                 envs = init_env_vars(peer_node, org)
 
                 peer_channel_cli = PeerChainCode(**envs)
-                code, content = peer_channel_cli.lifecycle_check_commit_readiness(orderer_url, orderer_tls_root_cert,
-                                                                                  channel_name, chaincode_name,
-                                                                                  chaincode_version, policy, sequence)
+                code, content = peer_channel_cli.lifecycle_check_commit_readiness(
+                    orderer_url, orderer_tls_root_cert, channel_name, chaincode_name, chaincode_version, policy, sequence)
                 if code != 0:
-                    return Response(err("check_commit_readiness failed."), status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        err("check_commit_readiness failed."),
+                        status=status.HTTP_400_BAD_REQUEST)
 
             except Exception as e:
                 return Response(
@@ -510,11 +548,20 @@ class ChainCodeViewSet(viewsets.ViewSet):
                     peer_root_certs.append(peer_tls_cert)
 
                 peer_channel_cli = PeerChainCode(**envs)
-                code = peer_channel_cli.lifecycle_commit(orderer_url, orderer_tls_root_cert, channel_name,
-                                                         chaincode_name, chaincode_version, policy,
-                                                         peer_address_list, peer_root_certs, sequence)
+                code = peer_channel_cli.lifecycle_commit(
+                    orderer_url,
+                    orderer_tls_root_cert,
+                    channel_name,
+                    chaincode_name,
+                    chaincode_version,
+                    policy,
+                    peer_address_list,
+                    peer_root_certs,
+                    sequence)
                 if code != 0:
-                    return Response(err("commit failed."), status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        err("commit failed."),
+                        status=status.HTTP_400_BAD_REQUEST)
 
             except Exception as e:
                 return Response(
@@ -545,7 +592,9 @@ class ChainCodeViewSet(viewsets.ViewSet):
             code, chaincodes_commited = peer_channel_cli.lifecycle_query_committed(
                 channel_name, chaincode_name)
             if code != 0:
-                return Response(err("query committed failed."), status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    err("query committed failed."),
+                    status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(
                 err(e.args), status=status.HTTP_400_BAD_REQUEST
